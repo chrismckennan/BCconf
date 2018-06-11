@@ -1,3 +1,5 @@
 .Ruserdata
-*.Rproj
+*.Rproj*
 *.Rmd
+.Rhistory
+.Rbuildignore
