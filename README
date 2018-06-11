@@ -1,0 +1,11 @@
+#BCconf
+An R package that estimates and adjusts for latent factors in high dimensional biological data using the bias-corrected method described in https://arxiv.org/abs/1801.00865v2
+
+##Model description
+The model for the p x n data matrix Y (p = num. of genes, CpG sites, etc., n = sample size) is Y = BX' + LC' + E, where gth row of E has mean 0 and covariance sigma^2_g * I_n. X is an n x d model matrix that contains all observed covariates to be included in the model and C are unobserved factors, like cell composition and/or technical factors. The goal is the estimate the columns of B corresponding to the columns of interest in X (i.e. disease status). The package also estimates C, which can be used in downstream analyses.
+
+##Package functions
+Correction: Estimate C and the columns of interest in B (i.e. the effects due to the covariates of interest), as well as corresponding test statistics and p-values. This is the main function.
+est.conf.num: Estimate the number of latent factors, i.e. the number of columns in C
+ChangeMethod: Change the confounder correction method.
+Sig.Omega: Compute the p-value for the null hypothesis that the design matrix X is not correlated with the latent factors C. All factors should be left in the final model even if this is not significant.
