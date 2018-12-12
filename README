@@ -8,7 +8,7 @@ The model for the p x n data matrix Y (p = num. of genes, CpG sites, etc., n = s
 Correction: Estimate C and the columns of interest in B (i.e. the effects due to the covariates of interest), as well as corresponding test statistics and p-values. This is the main function.
 est.conf.num: Estimate the number of latent factors, i.e. the number of columns in C, using CATE (see https://cran.r-project.org/web/packages/cate/cate.pdf)
 ChangeMethod: Change the confounder correction method.
-Sig.Omega: Compute the p-value for the null hypothesis that the design matrix X is not correlated with the latent factors C. All factors should be left in the final model even if this is not significant.
+Sig.Omega: Compute the p-value for the null hypothesis that the design matrix X is not correlated with the latent factors C. All factors should be left in the final model even if this is not significant.  
 
 ##Installation instructions:
 To install this R-package, first install "irlba", "cate" and "devtools" from CRAN if you do not already have them. Then type the following into the R-console:
