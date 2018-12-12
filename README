@@ -13,3 +13,5 @@ Sig.Omega: Compute the p-value for the null hypothesis that the design matrix X 
 ##Installation instructions:
 To install this R-package, first install "irlba", "cate" and "devtools" from CRAN if you do not already have them. Then type the following into the R-console:
 devtools::install_github("chrismckennan/BCconf")
+
+When installing, users may see the error message "Skipping 1 packages not available: sva". Apparently this is a new devtools feature, as it now attempts to update packages that BCconf is dependent on (the package cate depends on sva).
