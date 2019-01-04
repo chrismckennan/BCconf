@@ -1,0 +1,403 @@
+---
+title: "Simulate and analyze data for paper"
+author: "Chris McKennan"
+date: "10/29/2017"
+output: html_document
+---
+
+Running this script will reproduce the simulation results presented in the paper. To run, make sure the packages under "Libraries" are installed. To install our software BCconf, type the following into R:
+
+install.packages("devtools")
+devtools::install_github("chrismckennan/BCconf/BCconf")
+
+
+##Libraries
+All libraries used in simulations
+```{r Library}
+library(cate)
+library(parallel)
+library(qvalue)
+library(irlba)
+library(minfi)
+library(sva)
+library(dSVA)
+library(ruv)
+library(BCconf)
+```
+
+##Source functions
+Set your directory structure to load the following R-scripts:
+```{r Source}
+setwd("/Users/Chris/Desktop/Uchicago/Nicolae/GitWork/CellType/analysis")
+
+source("../R/Simulations/Simulation_171029.R")
+source("../R/Simulations/DetermineFDP.R")
+```
+The file Simulation_171029.R contains the function "SimulateData"" used to simulate data. DetermineFDP.R contains the function "AnalyzeData" used to analyze the results of all methods. Specifically, for each method we
+
+1.) Obtain each method's estimate for C, which is one of the objects returned by BCconf, cate, dSVA, sva, RUV-2 and RUV-4.
+2.) Use the estimate for C, C.hat, to estimate beta_1,...,beta_p with ordinary least squares using the design matrix [1 X C.hat]. This is done with the function "CalcPvalues" in DetermineFDP.R.
+3.) Calculate the false discovery proportion at a nominal false discovery proportion using q-value. This is done with the function "CalcFDP" in DetermineFDP.R.
+
+
+#Simulations for paper
+
+##Simulation 1
+pi.B = 0.95, Omega = (0 x 5, 0.5 x 5)
+
+Simulate data with A = A_2 and the E(Fraction of elements of B = 0) = 0.95
+```{r SetParameters1}
+n <- 100     #Number of samples
+p <- 10^5    #Number of genomic units
+K <- 10      #Number of latent factors
+frac.variance <- 0.5    #If this is 0.5, C explains 30% of the variability in X, on average
+B.sigma <- 0.4   #The non-zero comonents of B are simulated as B_g ~ N(0, B.sigma^2)
+pi.B <- 0.95     #Expected fraction of components of B that are 0
+L.sigma <- 0.5   #Minimum standard deviation for simulated L_{gk}
+n.sim <- 100     #Number of simulated datasets to analyze
+K.try <- c(K, K+10)     #The K's to be used with BCconf
+
+Info <- c(exp(seq(log((n-2)), 0, length=K))[1:(K/2)], exp(seq(log((n-2)/5), 0, length=K))[(K/2+1):K])   #Exptected eigenvalues lambda_1,...,lambda_K
+Omega2 <- frac.variance*B.sigma^2/sum(Info[(K/2+1):K]/(n-2))/(1-frac.variance)
+
+##Set Omega##
+#Omega <- rep(sqrt(Omega2*2/K), K)
+Omega <- c(rep(0, K/2), rep(sqrt(Omega2*2/K), K/2))    #The parameter "A" in simulation section from paper
+q.points <- seq(0.05, 0.25, by=0.05)     #q-value thresholds to consider
+
+##Plot parameters##
+col.plot <- c("red", "blue", "black")
+pch.plot <- c(1, 2, 4)
+lty.plot <- c(2, 3, 4)
+dx.plot <- 0.005
+```
+
+
+Simulated and analyze data. I will use a t-distribution with 4 degrees of freedom for the residuals. Run this code to simulate and analyze data with the above simulation setting.
+```{r SimulateAnalyzeData1}
+delta.L <- pmin((Info/(n-2)) / L.sigma^2, 1)
+out.mine <- array(0, dim=c(length(K.try), length(q.points), n.sim))    #FDP for BCconf
+out.none <- matrix(0, nrow=length(q.points), ncol=n.sim)      #FDP for no correction
+out.cate <- matrix(0, nrow=length(q.points), ncol=n.sim)      #FDP for CATE-RR
+out.known <- matrix(0, nrow=length(q.points), ncol=n.sim)     #FDP when C is known
+out.sva.irw <- matrix(0, nrow=length(q.points), ncol=n.sim)   #FDP for IRW-SVA
+out.dsva <- matrix(0, nrow=length(q.points), ncol=n.sim)      #FDP for dSVA
+out.ruv2 <- matrix(0, nrow=length(q.points), ncol=n.sim)      #FDP for RUV-2
+out.ruv4 <- matrix(0, nrow=length(q.points), ncol=n.sim)      #FDP for RUV-4
+out.power.mine <- array(0, dim=c(length(K.try), length(q.points), n.sim))      #Power for BCconf
+out.power.known <- matrix(0, nrow=length(q.points), ncol=n.sim)      #Power when C is known
+out.PecVar <- matrix(0, nrow=8, ncol=n.sim)  #Fraction of the variance in X explained by C
+for (i in 1:n.sim) {
+  Simulation <- SimulateData(n=n, p=p, Info=Info, Omega=Omega, L.sd=L.sigma, B.sd=B.sigma, B.pi=pi.B, mean.Sigma=1, var.Sigma=0.5^2, t.df=4)
+  out <- AnalyzeData(Sim = Simulation, q.points = q.points, K.try=K.try, n.controls = 600)
+  out.PecVar[,i] <- c(out$PercVar, out$PercVar.my[1], out$PercVar.my[2], out$PercVar.cate, out$PercVar.dsva, out$PercVar.sva, out$PercVar.ruv2, out$PercVar.ruv4)
+  out.none[,i] <- out$FDP.none
+  out.mine[,,i] <- out$FDP.my
+  out.cate[,i] <- out$FDP.cate
+  out.known[,i] <- out$FDP.known
+  out.sva.irw[,i] <- out$FDP.sva.irw
+  out.dsva[,i] <- out$FDP.dsva
+  out.ruv4[,i] <- out$FDP.ruv4
+  out.ruv2[,i] <- out$FDP.ruv2
+  
+  out.power.mine[,,i] <- out$Power.my
+  out.power.known[,i] <- out$Power.known
+  cat(i, "\n")
+}
+```
+
+Plot results from above simulation
+```{r PlotData1}
+###Collate results###
+n.points <- length(q.points)
+my.results <- array(0, dim=c(2,3,n.points)); my.results[1,,] <- apply(out.mine[1,,], 1, function(x){quantile(x[x>0],c(0.25,0.5,0.75))}); my.results[2,,] <- apply(out.mine[2,,], 1, function(x){quantile(x[x>0],c(0.25,0.5,0.75))})
+my.results.power <- array(0, dim=c(2,3,n.points)); my.results.power[1,,] <- apply(out.power.mine[1,,], 1, function(x){quantile(x[x>0],c(0.25,0.5,0.75))}); my.results.power[2,,] <- apply(out.power.mine[2,,], 1, function(x){quantile(x[x>0],c(0.25,0.5,0.75))})
+known.power <- apply(out.power.known, 1, function(x){quantile(x[x > 0],c(0.25,0.5,0.75))})
+
+cate.results <- apply(out.cate, 1, function(x){quantile(x[x > 0],c(0.25,0.5,0.75))})
+dsva.results <- apply(out.dsva, 1, function(x){quantile(x[x > 0],c(0.25,0.5,0.75))})
+sva.results <- apply(out.sva.irw, 1, function(x){quantile(x[x > 0],c(0.25,0.5,0.75))})
+known.results <- apply(out.known, 1, function(x){quantile(x[x > 0],c(0.25,0.5,0.75))})
+none.results <- apply(out.none, 1, function(x){quantile(x[x > 0],c(0.25,0.5,0.75))})
+ruv2.results <- apply(out.ruv2, 1, function(x){quantile(x[x > 0],c(0.25,0.5,0.75))})
+ruv4.results <- apply(out.ruv4, 1, function(x){quantile(x[x > 0],c(0.25,0.5,0.75))})
+
+##Box plot of Results at a 20% FDR##
+q.plot <- 0.2
+axis.labels <- c("C known", expression(paste("BC, ", hat(K)==10)), expression(paste("BC, ", hat(K)==20)), "CATE-RR", "dSVA", "IRW-SVA", "RUV-2", "RUV-4", "None")
+
+ind.plot <- which(q.points == q.plot)
+data.plot <- data.frame(known = out.known[ind.plot,], my.10 = out.mine[1,ind.plot,], my.20 = out.mine[2,ind.plot,], cate=out.cate[ind.plot,], dsva=out.dsva[ind.plot,], sva=out.sva.irw[ind.plot,], ruv2=out.ruv2[ind.plot,], ruv4=out.ruv4[ind.plot,], none=out.none[ind.plot,])
+boxplot(data.plot, axes=F, at=1:length(axis.labels), ylim=c(0,1))
+axis(side = 2, at = seq(0,1,by=0.2))
+axis(side = 1, at = 1:length(axis.labels), labels = axis.labels, las = 2)
+title(ylab = "True FDP")
+abline(h=q.plot, lty=2, lwd=2, col="red")
+```
+
+##Simulation 2
+pi.B = 0.80, Omega = (0 x 5, 0.5 x 5)
+
+Simulate data with A = A_2 and the E(Fraction of elements of B = 0) = 0.80
+```{r SetParameters2}
+n <- 100
+p <- 10^5
+K <- 10
+frac.variance <- 0.5
+B.sigma <- 0.4
+pi.B <- 0.80
+L.sigma <- 0.5
+n.sim <- 100
+K.try <- c(K, K+10)
+
+Info <- c(exp(seq(log((n-2)), 0, length=K))[1:(K/2)], exp(seq(log((n-2)/5), 0, length=K))[(K/2+1):K])
+#Info <- exp(seq(log((n-2)), 0, length=K))   #n/p * L'L; n/5 for paper
+Omega2 <- frac.variance*B.sigma^2/sum(Info[(K/2+1):K]/(n-2))/(1-frac.variance)
+
+##Set Omega##
+#Omega <- rep(sqrt(Omega2*2/K), K)
+Omega <- c(rep(0, K/2), rep(sqrt(Omega2*2/K), K/2))
+q.points <- seq(0.05, 0.25, by=0.05)
+
+##Plot Parameters##
+col.plot <- c("red", "blue", "black")  #CATE, mine, known
+pch.plot <- c(1, 2, 4)
+lty.plot <- c(2, 3, 4)
+dx.plot <- 0.005
+```
+
+
+Simulated and analyze data.
+```{r SimulateAnalyzeData2}
+delta.L <- pmin((Info/(n-2)) / L.sigma^2, 1)
+out.mine <- array(0, dim=c(length(K.try), length(q.points), n.sim))
+out.none <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.cate <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.known <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.sva.irw <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.dsva <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.ruv2 <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.ruv4 <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.power.mine <- array(0, dim=c(length(K.try), length(q.points), n.sim))
+out.power.known <- matrix(0, nrow=length(q.points), ncol=n.sim)
+for (i in 1:n.sim) {
+  Simulation <- SimulateData(n=n, p=p, Info=Info, Omega=Omega, L.sd=L.sigma, B.sd=B.sigma, B.pi=pi.B, mean.Sigma=1, var.Sigma=0.5^2, t.df=4)
+  out <- AnalyzeData(Sim = Simulation, q.points = q.points, K.try=K.try, n.controls = 600)
+  out.none[,i] <- out$FDP.none
+  out.mine[,,i] <- out$FDP.my
+  out.cate[,i] <- out$FDP.cate
+  out.known[,i] <- out$FDP.known
+  out.sva.irw[,i] <- out$FDP.sva.irw
+  out.dsva[,i] <- out$FDP.dsva
+  out.ruv4[,i] <- out$FDP.ruv4
+  out.ruv2[,i] <- out$FDP.ruv2
+  
+  out.power.mine[,,i] <- out$Power.my
+  out.power.known[,i] <- out$Power.known
+  cat(i, "\n")
+}
+```
+
+
+```{r PlotData2}
+###Collate results###
+n.points <- length(q.points)
+my.results <- array(0, dim=c(2,3,n.points)); my.results[1,,] <- apply(out.mine[1,,], 1, function(x){quantile(x,c(0.25,0.5,0.75))}); my.results[2,,] <- apply(out.mine[2,,], 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+cate.results <- apply(out.cate, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+dsva.results <- apply(out.dsva, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+sva.results <- apply(out.sva.irw, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+known.results <- apply(out.known, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+none.results <- apply(out.none, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+ruv2.results <- apply(out.ruv2, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+ruv4.results <- apply(out.ruv4, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+
+
+##Box plot of Results at a 20% FDR##
+q.plot <- 0.2
+axis.labels <- c("C known", expression(paste("BC, ", hat(K)==10)), expression(paste("BC, ", hat(K)==20)), "CATE-RR", "dSVA", "IRW-SVA", "RUV-2", "RUV-4", "None")
+
+ind.plot <- which(q.points == q.plot)
+data.plot <- data.frame(known = out.known[ind.plot,], my.10 = out.mine[1,ind.plot,], my.20 = out.mine[2,ind.plot,], cate=out.cate[ind.plot,], dsva=out.dsva[ind.plot,], sva=out.sva.irw[ind.plot,], ruv2=out.ruv2[ind.plot,], ruv4=out.ruv4[ind.plot,], none=out.none[ind.plot,])
+boxplot(data.plot, axes=F, at=1:length(axis.labels), ylim=c(0,1))
+axis(side = 2, at = seq(0,1,by=0.2))
+axis(side = 1, at = 1:length(axis.labels), labels = axis.labels, las = 2)
+title(ylab = "True FDP")
+abline(h=q.plot, lty=2, lwd=2, col="red")
+```
+
+##Simulation 3
+pi.B = 0.95, Omega = (0.5 x 5, 0 x 5)
+
+Simulate data with A = A_1 and the E(Fraction of elements of B = 0) = 0.95
+```{r SetParameters3}
+n <- 100
+p <- 10^5
+K <- 10
+frac.variance <- 0.5   
+B.sigma <- 0.4  
+pi.B <- 0.95
+L.sigma <- 0.5
+n.sim <- 100
+K.try <- c(K, K+10)
+
+Info <- c(exp(seq(log((n-2)), 0, length=K))[1:(K/2)], exp(seq(log((n-2)/5), 0, length=K))[(K/2+1):K])
+#Info <- exp(seq(log((n-2)), 0, length=K))   #n/p * L'L; n/5 for paper
+Omega2 <- frac.variance*B.sigma^2/sum(Info[(K/2+1):K]/(n-2))/(1-frac.variance)
+
+##Set Omega##
+#Omega <- rep(sqrt(Omega2*2/K), K)
+Omega <- c(rep(sqrt(Omega2*2/K), K/2), rep(0, K/2))
+q.points <- seq(0.05, 0.25, by=0.05)
+
+##Plot Parameters##
+col.plot <- c("red", "blue", "black")  #CATE, mine, known
+pch.plot <- c(1, 2, 4)
+lty.plot <- c(2, 3, 4)
+dx.plot <- 0.005
+```
+
+
+Simulated and analyze data.
+```{r SimulateAnalyzeData3}
+delta.L <- pmin((Info/(n-2)) / L.sigma^2, 1)
+out.mine <- array(0, dim=c(length(K.try), length(q.points), n.sim))
+out.none <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.cate <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.known <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.sva.irw <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.dsva <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.ruv2 <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.ruv4 <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.power.mine <- array(0, dim=c(length(K.try), length(q.points), n.sim))
+out.power.known <- matrix(0, nrow=length(q.points), ncol=n.sim)
+for (i in 1:n.sim) {
+  Simulation <- SimulateData(n=n, p=p, Info=Info, Omega=Omega, L.sd=L.sigma, B.sd=B.sigma, B.pi=pi.B, mean.Sigma=1, var.Sigma=0.5^2, t.df=4)
+  out <- AnalyzeData(Sim = Simulation, q.points = q.points, K.try=K.try, n.controls = 600)
+  out.none[,i] <- out$FDP.none
+  out.mine[,,i] <- out$FDP.my
+  out.cate[,i] <- out$FDP.cate
+  out.known[,i] <- out$FDP.known
+  out.sva.irw[,i] <- out$FDP.sva.irw
+  out.dsva[,i] <- out$FDP.dsva
+  out.ruv4[,i] <- out$FDP.ruv4
+  out.ruv2[,i] <- out$FDP.ruv2
+  
+  out.power.mine[,,i] <- out$Power.my
+  out.power.known[,i] <- out$Power.known
+  cat(i, "\n")
+}
+```
+
+```{r PlotData3}
+###Collate results###
+n.points <- length(q.points)
+my.results <- array(0, dim=c(2,3,n.points)); my.results[1,,] <- apply(out.mine[1,,], 1, function(x){quantile(x,c(0.25,0.5,0.75))}); my.results[2,,] <- apply(out.mine[2,,], 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+cate.results <- apply(out.cate, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+dsva.results <- apply(out.dsva, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+sva.results <- apply(out.sva.irw, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+known.results <- apply(out.known, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+none.results <- apply(out.none, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+ruv2.results <- apply(out.ruv2, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+ruv4.results <- apply(out.ruv4, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+
+##Box plot of Results at a 20% FDR##
+q.plot <- 0.2
+axis.labels <- c("C known", expression(paste("BC, ", hat(K)==10)), expression(paste("BC, ", hat(K)==20)), "CATE-RR", "dSVA", "IRW-SVA", "RUV-2", "RUV-4", "None")
+
+ind.plot <- which(q.points == q.plot)
+data.plot <- data.frame(known = out.known[ind.plot,], my.10 = out.mine[1,ind.plot,], my.20 = out.mine[2,ind.plot,], cate=out.cate[ind.plot,], dsva=out.dsva[ind.plot,], sva=out.sva.irw[ind.plot,], ruv2=out.ruv2[ind.plot,], ruv4=out.ruv4[ind.plot,], none=out.none[ind.plot,])
+boxplot(data.plot, axes=F, at=1:length(axis.labels), ylim=c(0,1))
+axis(side = 2, at = seq(0,1,by=0.2))
+axis(side = 1, at = 1:length(axis.labels), labels = axis.labels, las = 2)
+title(ylab = "True FDP")
+abline(h=q.plot, lty=2, lwd=2, col="red")
+```
+
+##Simulation 4
+pi.B = 0.80, Omega = (0.5 x 5, 0 x 5)
+
+Simulate data with A = A_1 and the E(Fraction of elements of B = 0) = 0.80
+```{r SetParameters4}
+n <- 100
+p <- 10^5
+K <- 10
+frac.variance <- 0.5  
+B.sigma <- 0.4   
+pi.B <- 0.80
+L.sigma <- 0.5
+n.sim <- 100
+K.try <- c(K, K+10)
+
+Info <- c(exp(seq(log((n-2)), 0, length=K))[1:(K/2)], exp(seq(log((n-2)/5), 0, length=K))[(K/2+1):K])
+#Info <- exp(seq(log((n-2)), 0, length=K))   #n/p * L'L; n/5 for paper
+Omega2 <- frac.variance*B.sigma^2/sum(Info[(K/2+1):K]/(n-2))/(1-frac.variance)
+
+##Set Omega##
+#Omega <- rep(sqrt(Omega2*2/K), K)
+Omega <- c(rep(sqrt(Omega2*2/K), K/2), rep(0, K/2))
+q.points <- seq(0.05, 0.25, by=0.05)
+
+##Plot Parameters##
+col.plot <- c("red", "blue", "black")  #CATE, mine, known
+pch.plot <- c(1, 2, 4)
+lty.plot <- c(2, 3, 4)
+dx.plot <- 0.005
+```
+With these values of Omega, C is explaining 30% of the variability in X, on average. Some things to note: CATE fails for obvious reasons. IRW SVA tends to fail when the confounding signal is large because the first step in the algorithm effectively looks for genes with small correlation with X, which will be very few genes i
+
+Simulated and analyze data. I will use a t-distribution with 4 degrees of freedom; tmp.cate, tmp.mine
+```{r SimulateAnalyzeData4}
+delta.L <- pmin((Info/(n-2)) / L.sigma^2, 1)
+out.mine <- array(0, dim=c(length(K.try), length(q.points), n.sim))
+out.none <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.cate <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.known <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.sva.irw <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.dsva <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.ruv2 <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.ruv4 <- matrix(0, nrow=length(q.points), ncol=n.sim)
+out.power.mine <- array(0, dim=c(length(K.try), length(q.points), n.sim))
+out.power.known <- matrix(0, nrow=length(q.points), ncol=n.sim)
+for (i in 1:n.sim) {
+  Simulation <- SimulateData(n=n, p=p, Info=Info, Omega=Omega, L.sd=L.sigma, B.sd=B.sigma, B.pi=pi.B, mean.Sigma=1, var.Sigma=0.5^2, t.df=4)
+  out <- AnalyzeData(Sim = Simulation, q.points = q.points, K.try=K.try, n.controls = 600)
+  out.none[,i] <- out$FDP.none
+  out.mine[,,i] <- out$FDP.my
+  out.cate[,i] <- out$FDP.cate
+  out.known[,i] <- out$FDP.known
+  out.sva.irw[,i] <- out$FDP.sva.irw
+  out.dsva[,i] <- out$FDP.dsva
+  out.ruv4[,i] <- out$FDP.ruv4
+  out.ruv2[,i] <- out$FDP.ruv2
+  
+  out.power.mine[,,i] <- out$Power.my
+  out.power.known[,i] <- out$Power.known
+  cat(i, "\n")
+}
+```
+
+```{r PlotData4}
+###Collate results###
+n.points <- length(q.points)
+my.results <- array(0, dim=c(2,3,n.points)); my.results[1,,] <- apply(out.mine[1,,], 1, function(x){quantile(x,c(0.25,0.5,0.75))}); my.results[2,,] <- apply(out.mine[2,,], 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+cate.results <- apply(out.cate, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+dsva.results <- apply(out.dsva, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+sva.results <- apply(out.sva.irw, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+known.results <- apply(out.known, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+none.results <- apply(out.none, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+ruv2.results <- apply(out.ruv2, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+ruv4.results <- apply(out.ruv4, 1, function(x){quantile(x,c(0.25,0.5,0.75))})
+
+##Box plot of Results at a 20% FDR##
+q.plot <- 0.2
+axis.labels <- c("C known", expression(paste("BC, ", hat(K)==10)), expression(paste("BC, ", hat(K)==20)), "CATE-RR", "dSVA", "IRW-SVA", "RUV-2", "RUV-4", "None")
+
+ind.plot <- which(q.points == q.plot)
+data.plot <- data.frame(known = out.known[ind.plot,], my.10 = out.mine[1,ind.plot,], my.20 = out.mine[2,ind.plot,], cate=out.cate[ind.plot,], dsva=out.dsva[ind.plot,], sva=out.sva.irw[ind.plot,], ruv2=out.ruv2[ind.plot,], ruv4=out.ruv4[ind.plot,], none=out.none[ind.plot,])
+boxplot(data.plot, axes=F, at=1:length(axis.labels), ylim=c(0,1))
+axis(side = 2, at = seq(0,1,by=0.2))
+axis(side = 1, at = 1:length(axis.labels), labels = axis.labels, las = 2)
+title(ylab = "True FDP")
+abline(h=q.plot, lty=2, lwd=2, col="red")
+```
+
