@@ -4,9 +4,18 @@
 \alias{Correction}
 \title{Estimate the effects of interest in omic data while accounting for unobserved covariates}
 \usage{
-Correction(Y, X, ind.cov, r.confound, max.iter.svd = 1, method = c("ols",
-  "theory", "huber", "naive", "none"), shrink.Sigma = F, min.true.eig = 0.1,
-  svd.method = "slow")
+Correction(
+  Y,
+  X,
+  ind.cov,
+  r.confound,
+  max.iter.svd = 1,
+  method = c("ols", "theory", "huber", "iterative", "naive", "none"),
+  shrink.Sigma = F,
+  min.true.eig = 0.1,
+  svd.method = "slow",
+  iterative.params = list(n.iter = 5, qvalue.thresh = 0.1)
+)
 }
 \arguments{
 \item{Y}{a p x n data matrix, where p = #of units (i.e. genes) and n = #of samples}
@@ -19,7 +28,7 @@ Correction(Y, X, ind.cov, r.confound, max.iter.svd = 1, method = c("ols",
 
 \item{max.iter.svd}{The number of SVD iterations. When p is large (i.e. DNA methlation or gene expression), the default of 1 will suffice. For smaller p (i.e. metabolomic data), a value of 3 is better.}
 
-\item{method}{The confounder correction method to use. Both "ols" and "theory" use the bias-corrected method described in \url{https://arxiv.org/abs/1801.00865v2}, where "ols" weights units by their inverse variance. If neither of these methods is used, we recommend using "huber".}
+\item{method}{The confounder correction method to use. Both "ols" and "theory" use the bias-corrected method described in \url{https://arxiv.org/abs/1801.00865v2}, where "ols" weights units by their inverse variance. "iterative" iteratively estimates latent confounds by removing genomic units associated with the covariate of interest from the estimation procedure. If none of these methods is used, we recommend using "huber".}
 
 \item{shrink.Sigma}{If \code{TRUE}, residual variances are shrunk using empirical Bayes with an inverse gamma prior. The default of \code{FALSE} is recommended.}
 

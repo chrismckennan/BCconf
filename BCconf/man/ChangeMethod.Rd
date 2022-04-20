@@ -4,8 +4,10 @@
 \alias{ChangeMethod}
 \title{Change the confounding correction method}
 \usage{
-ChangeMethod(Corr.Object, new.method = c("ols", "theory", "huber", "naive",
-  "none"))
+ChangeMethod(
+  Corr.Object,
+  new.method = c("ols", "theory", "huber", "iterative", "naive", "none")
+)
 }
 \arguments{
 \item{Corr.Object}{Output from the \code{Correction} function.}
