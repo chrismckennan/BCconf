@@ -1,12 +1,12 @@
 Package: BCconf
 Type: Package
 Title: Bias-corrected confounder estimation and adjustment.
-Version: 1.2
-Date: 2022-04-20
+Version: 1.3
+Date: 2024-09-13
 Author: Chris McKennan
 Maintainer: Chris McKennan <chm195@pitt.edu>
 Description: Estimate latent factors present in high dimensional biological data and confounder-adjusted regression coefficients, test statistics and p-values using our bias-corrected method. The main function is "Correction". Please install the package qvalue from Bioconductor.
-Depends: irlba, cate, Matrix, qvalue
+Depends: irlba, Matrix, qvalue
 License: GPL-2
 Encoding: UTF-8
 LazyData: true

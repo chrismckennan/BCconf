@@ -3,4 +3,3 @@
 export(ChangeMethod)
 export(Correction)
 export(Sig.Omega)
-export(est.conf.num)
