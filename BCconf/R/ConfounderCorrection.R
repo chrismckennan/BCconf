@@ -1,4 +1,4 @@
-library(cate)
+#library(cate)
 library(irlba)
 
 #' Estimate the number of latent factors
